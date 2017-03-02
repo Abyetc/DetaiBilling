@@ -1,0 +1,48 @@
+package com.aby.charging;
+import com.aby.charging.*;
+import com.aby.data.*;
+import com.aby.util.*;
+
+rule "国内主叫_免费资源"
+	salience 100
+	when
+		f : FreeCalling( amount > 0 && description == "国内主叫_免费资源" && freeAmount : amount)
+		e : CallingEvent(dur > 0 && packageName == "lexiang4G_59" && f.types contains type && f.callType == callType && oppositeNumType == "普通号码" && eventDur : dur && f.beginTime <= beginTime && f.endTime > beginTime)
+	then
+		int min = Math.min(freeAmount, eventDur);
+		min = Math.min(min, MyTime.countMinutes(f.getEndTime(), e.getBeginTime()));
+		f.setAmount(freeAmount - min);
+		e.setDur(eventDur - min);
+		if(freeAmount == min){
+		    f.setRunOutEvent(e.getDescription());
+		}
+		update (e);
+		update (f);
+end
+
+rule "国内被叫"
+	salience 90
+	when
+		e : CallingEvent(dur > 0 && packageName == "国内被叫" && ( type == "本地通话" || type == "省内通话" || type == "国内通话" || type == "国内漫游通话")  && oppositeNumType == "普通号码" && callType == "被叫" && eventDur : dur)
+	then
+		int fee = 0 * eventDur;
+		e.setFee(e.getFee() + fee);
+		e.setDur(0);
+		update (e);
+end
+
+rule "国内主叫"
+	salience 80
+	when
+		e : CallingEvent(dur > 0 && packageName == "国内主叫" && ( type == "本地通话" || type == "省内通话" || type == "国内通话" || type == "国内漫游通话")  && oppositeNumType == "普通号码" && callType == "主叫" && eventDur : dur && beginTime >= 80000 && beginTime < 220000)
+	then
+		int max = MyTime.countMinutes(220000, e.getBeginTime());
+		int min = Math.min(max, eventDur);
+		int fee = 0 * min;
+		e.setFee(e.getFee() + fee);
+		e.setDur(eventDur - min);
+		int newBeginTime = MyTime.addMins(e.getBeginTime(), min);
+		e.setBeginTime(newBeginTime);
+		update (e);
+end
+

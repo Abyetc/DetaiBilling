@@ -1,0 +1,65 @@
+package com.aby.charging;
+
+import com.aby.charging.*;
+import com.aby.data.*;
+import com.aby.util.*;
+ 
+rule "本地通话_免费资源"
+	salience 2
+	when
+		f : FreeCalling( amount > 0 && description == "本地通话_免费资源" && freeAmount : amount)
+		e : CallingEvent(dur > 0 && packageName == "lexiang4G_59" && f.types contains type && f.callType == callType && oppositeNumType == "普通号码" && eventDur : dur && f.beginTime <= beginTime && f.endTime > beginTime)
+	then
+		int min = Math.min(freeAmount, eventDur);
+		min = Math.min(min, MyTime.countMinutes(f.getEndTime(), e.getBeginTime()));
+		f.setAmount(freeAmount - min);
+		e.setDur(eventDur - min);
+		if(freeAmount == min){
+		    f.setRunOutEvent(e.getDescription());
+		}
+		update (e);
+		update (f);
+end
+
+rule "国内通话_免费资源"
+	salience 1
+	when
+		f : FreeCalling( amount > 0 && description == "国内通话_免费资源" && freeAmount : amount)
+		e : CallingEvent(dur > 0 && packageName == "lexiang4G_59" && f.types contains type && f.callType == callType && oppositeNumType == "普通号码" && eventDur : dur)
+	then
+		int min = Math.min(freeAmount, eventDur);
+		f.setAmount(freeAmount - min);
+		e.setDur(eventDur - min);
+		if(freeAmount == min){
+		    f.setRunOutEvent(e.getDescription());
+		}
+		update (e);
+		update (f);
+end
+
+rule "本地通话"
+	salience 10
+	when
+		e : CallingEvent(dur > 0 && packageName == "lexiang4G_59" && type == "本地通话" && oppositeNumType == "普通号码" && callType == "主叫" && eventDur : dur)
+	then
+		int fee = 10 * eventDur;
+		e.setFee(e.getFee() + fee);
+		e.setDur(0);
+		update (e);
+end
+
+rule "国内通话"
+	salience 6
+	when
+		e : CallingEvent(dur > 0 && packageName == "lexiang4G_59" && ( type == "本地通话" || type == "国内通话")  && oppositeNumType == "普通号码" && callType == "主叫" && eventDur : dur && beginTime >= 0 && beginTime < 235959)
+	then
+		int max = MyTime.countMinutes(235959, e.getBeginTime());
+		int min = Math.min(max, eventDur);
+		int fee = 10 * min;
+		e.setFee(e.getFee() + fee);
+		e.setDur(eventDur - min);
+		int newBeginTime = MyTime.addMins(e.getBeginTime(), min);
+		e.setBeginTime(newBeginTime);
+		update (e);
+end
+
